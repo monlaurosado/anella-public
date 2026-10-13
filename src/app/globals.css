@@ -1,0 +1,209 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  --background: #f7f7f4;
+  --foreground: #171713;
+  --surface: #ffffff;
+  --surface-muted: #efeee9;
+  --border: #dedbd2;
+  --control-border: #817d73;
+  --accent: #b42318;
+  --accent-strong: #8f140d;
+  --danger: #b42318;
+  --success: #13795b;
+  --warning: #7a4b0a;
+  --info: #2563eb;
+}
+
+:focus-visible {
+  outline-color: #005fcc !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  :focus-visible {
+    outline-color: #ffd166 !important;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #11110f;
+    --foreground: #f5f2eb;
+    --surface: #191915;
+    --surface-muted: #25241f;
+    --border: #36342d;
+    --control-border: #7d796f;
+    --accent: #ff6b5f;
+    --accent-strong: #ff8a80;
+    --danger: #ff6b5f;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --info: #60a5fa;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  border-color: var(--control-border) !important;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+@layer base {
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+.skip-link:focus {
+  align-items: center;
+  clip: auto;
+  clip-path: none;
+  display: inline-flex;
+  height: auto;
+  margin: 0;
+  min-height: 44px;
+  min-width: 44px;
+  overflow: visible;
+  padding: 12px 16px;
+  white-space: normal;
+  width: auto;
+}
+
+.leaflet-container {
+  background: var(--surface-muted);
+  color: #171713;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  overscroll-behavior: contain;
+}
+
+.leaflet-control-attribution {
+  font-size: 10px;
+}
+
+.leaflet-container .leaflet-bar.leaflet-control-zoom a,
+.leaflet-container.leaflet-touch .leaflet-bar.leaflet-control-zoom a {
+  height: 44px;
+  line-height: 44px;
+  min-height: 44px;
+  min-width: 44px;
+  width: 44px;
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  align-items: center;
+  display: flex;
+  font-size: 24px;
+  height: 44px;
+  justify-content: center;
+  line-height: 44px;
+  width: 44px;
+}
+
+.leaflet-popup-content {
+  margin-right: 48px;
+}
+
+@media (max-width: 480px) {
+  [data-public-fire-map-stage] .leaflet-popup-content {
+    width: min(240px, calc(100vw - 120px)) !important;
+  }
+}
+
+.public-fire-detection-marker,
+.coordination-fire-detection-marker {
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.34));
+}
+
+.public-fire-detection-marker:focus,
+.coordination-fire-detection-marker:focus {
+  outline: 3px solid #005fcc;
+  outline-offset: 3px;
+}
+
+.leaflet-tooltip {
+  border: 0;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.2);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 7px 9px;
+}
+
+[data-public-fire-map] summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-public-fire-map-stage]:has(.leaflet-popup) [data-map-overlay] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+[data-public-fire-map-stage]:has(.leaflet-popup) .leaflet-marker-pane,
+[data-public-fire-map-stage]:has(.leaflet-popup) .leaflet-overlay-pane,
+[data-public-fire-map-stage]:has(.leaflet-popup)
+  .leaflet-public-fire-signals-pane {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.incident-marker {
+  align-items: center;
+  background: var(--danger);
+  border: 2px solid #ffffff;
+  clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.22);
+  color: #ffffff;
+  display: flex;
+  font-size: 14px;
+  font-weight: 800;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+.safe-marker {
+  align-items: center;
+  background: var(--success);
+  border: 2px solid #ffffff;
+  border-radius: 50% 50% 50% 0;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.2);
+  color: #ffffff;
+  display: flex;
+  font-size: 14px;
+  font-weight: 800;
+  height: 40px;
+  justify-content: center;
+  transform: rotate(-45deg);
+  width: 40px;
+}
+
+.safe-marker > span {
+  transform: rotate(45deg);
+}
+
+@media (prefers-color-scheme: dark) {
+  .safe-marker {
+    color: #171713;
+  }
+}

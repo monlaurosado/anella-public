@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate (${{ matrix.database }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - database: mysql-8.0.16
+            image: mysql:8.0.16@sha256:5d11283aee9b73509b737785e0ad79a2d9abf51f4abf3f221702a8add0e36bf2
+            admin: mysqladmin
+          - database: mysql-8.4
+            image: mysql:8.4.10@sha256:c831a0f11348d402b43d77453e17d770be2eef356615a2823fe0f5a0d6c8b9af
+            admin: mysqladmin
+          - database: mariadb-11.8
+            image: mariadb:11.8.8@sha256:efb4959ef2c835cd735dbc388eb9ad6aab0c78dd64febcd51bc17481111890c4
+            admin: mariadb-admin
+    env:
+      ANELLA_ENV: test
+      DATABASE_URL: mysql://anella:anella_ci@127.0.0.1:3306/anella
+      ANELLA_DRILL_ADMIN_DATABASE_URL: mysql://root:anella_root_ci@127.0.0.1:3306/mysql
+      NEXTAUTH_URL: http://127.0.0.1:3100
+      NEXTAUTH_SECRET: anella-ci-secret-with-at-least-32-characters
+      IDEMPOTENCY_SECRET: anella-ci-idempotency-secret-stable-and-separate
+      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      APP_URL: http://127.0.0.1:3100
+      DEPLOYMENT_VERSION: 1.0.0
+      PRIVACY_CONTROLLER_NAME: Coordinacion de pruebas
+      PRIVACY_CONTACT_EMAIL: privacidad@anella.local
+      PRIVACY_LEGAL_BASIS: Consentimiento operativo de la persona aportante
+      PRIVACY_PROCESSOR_NAME: Infraestructura aislada de CI
+      PRIVACY_RETENTION_DAYS: "90"
+      SEED_ADMIN_EMAIL: admin@anella.local
+      SEED_ADMIN_PASSWORD: AnellaLocal-2026!
+      SEED_ADMIN_NAME: Coordinacion de pruebas
+      SEED_MUNICIPALITY_NAME: Municipio piloto
+      SEED_ORGANIZATION_NAME: Proteccion Civil municipal
+      SEED_DEMO_DATA: "true"
+      SEED_RESET_ADMIN_PASSWORD: "false"
+      SEED_BOOTSTRAP_ADMIN: "false"
+    services:
+      database:
+        image: ${{ matrix.image }}
+        env:
+          MYSQL_DATABASE: anella
+          MYSQL_USER: anella
+          MYSQL_PASSWORD: anella_ci
+          MYSQL_ROOT_PASSWORD: anella_root_ci
+          MARIADB_DATABASE: anella
+          MARIADB_USER: anella
+          MARIADB_PASSWORD: anella_ci
+          MARIADB_ROOT_PASSWORD: anella_root_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="${{ matrix.admin }} ping -h 127.0.0.1 -uanella -panella_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get update && sudo apt-get install -y default-mysql-client
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run test:production-start
+      - run: npm test
+      - run: npm run test:load
+      - run: npm run db:preflight
+      - run: npm run db:restore-drill
+      - run: npm run test:e2e
+      - run: npm run audit:security -- --audit-level=low
+      - run: npm run audit:security -- --omit=dev --audit-level=low
+
+  verify-production:
+    name: Verify production
+    if: github.repository == 'monlaurosado/anella' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      PRODUCTION_URL: https://darkslategray-dogfish-555482.hostingersite.com
+    steps:
+      - name: Verify the deployed application
+        run: |
+          set -euo pipefail
+          for attempt in {1..20}; do
+            nonce="${GITHUB_SHA}-${attempt}"
+            root_status="$(curl --silent --show-error --location --max-time 20 --output /tmp/anella-root.html --write-out '%{http_code}' "${PRODUCTION_URL}/?ci=${nonce}" || true)"
+            health_status="$(curl --silent --show-error --location --max-time 20 --output /tmp/anella-health.json --write-out '%{http_code}' "${PRODUCTION_URL}/api/health?ci=${nonce}" || true)"
+            manifest_status="$(curl --silent --show-error --location --max-time 20 --output /tmp/anella-manifest.json --write-out '%{http_code}' "${PRODUCTION_URL}/manifest.webmanifest?ci=${nonce}" || true)"
+            detections_status="$(curl --silent --show-error --location --max-time 20 --output /tmp/anella-detections.json --write-out '%{http_code}' "${PRODUCTION_URL}/api/fire-detections?ci=${nonce}" || true)"
+            if [[ "${root_status}" == "200" && "${health_status}" == "200" && "${manifest_status}" == "200" && "${detections_status}" == "200" ]] &&
+              grep --quiet 'Anella' /tmp/anella-root.html &&
+              jq --exit-status --arg sha "${GITHUB_SHA}" '.ok == true and .database == "available" and .version == $sha' /tmp/anella-health.json >/dev/null &&
+              jq --exit-status '.name | type == "string" and length > 0' /tmp/anella-manifest.json >/dev/null &&
+              jq --exit-status '.features | type == "array"' /tmp/anella-detections.json >/dev/null; then
+              echo "Production smoke test passed."
+              exit 0
+            fi
+            echo "Attempt ${attempt}: root=${root_status}, health=${health_status}, manifest=${manifest_status}, detections=${detections_status}"
+            sleep 15
+          done
+          echo "Production did not become healthy after deployment."
+          exit 1

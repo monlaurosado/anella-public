@@ -1,0 +1,2 @@
+ALTER TABLE `SafePoint`
+  ADD COLUMN `radiusMeters` INTEGER NOT NULL DEFAULT 30;

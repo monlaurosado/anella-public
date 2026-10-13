@@ -1,0 +1,70 @@
+[
+  {
+    "package": "braces",
+    "version": "3.0.3",
+    "file": "lib/parse.js",
+    "advisory": "GHSA-vfj7-8cjw-p6xm",
+    "originalSha256": "e572166565f15fa6ad9865ae49d678218e32aabfd1b3720f6d0d43d39800d310",
+    "patchedSha256": "6e30a8cfd299e1acc1571590a0978c876b0b811dba44ce1f2111b2f8f09de018",
+    "edits": [
+      {
+        "before": "      stack.push(block);",
+        "after": "      if (stack.length >= 128) throw new RangeError('braces nesting exceeds security limit (128)');\n      stack.push(block);"
+      }
+    ]
+  },
+  {
+    "package": "braces",
+    "version": "3.0.3",
+    "file": "lib/compile.js",
+    "advisory": "GHSA-vfj7-8cjw-p6xm",
+    "originalSha256": "dc98f22eee3d511785d92a00758d5f0d48efed5f5813bdecc2de430c529b5c9f",
+    "patchedSha256": "54d5c37952167fd849a461ecc2708d63e9fef3183c9feef17bcb8cd18c2ab00e",
+    "edits": [
+      {
+        "before": "  const walk = (node, parent = {}) => {",
+        "after": "  const walk = (node, parent = {}, depth = 0) => {\n    if (depth > 128) throw new RangeError('braces nesting exceeds security limit (128)');"
+      },
+      {
+        "before": "walk(child, node)",
+        "after": "walk(child, node, depth + 1)"
+      }
+    ]
+  },
+  {
+    "package": "braces",
+    "version": "3.0.3",
+    "file": "lib/expand.js",
+    "advisory": "GHSA-vfj7-8cjw-p6xm",
+    "originalSha256": "41ccc196ebfa7b7781a634e721eb744e4e7bcb54cba427a7e3d6806a1b9e58f7",
+    "patchedSha256": "054e96875c215af4bc525182fafccbd9fb24c01f4090f4e03ecaef48bd3b2c32",
+    "edits": [
+      {
+        "before": "  const walk = (node, parent = {}) => {",
+        "after": "  const walk = (node, parent = {}, depth = 0) => {\n    if (depth > 128) throw new RangeError('braces nesting exceeds security limit (128)');"
+      },
+      {
+        "before": "walk(child, node)",
+        "after": "walk(child, node, depth + 1)"
+      }
+    ]
+  },
+  {
+    "package": "braces",
+    "version": "3.0.3",
+    "file": "lib/stringify.js",
+    "advisory": "GHSA-vfj7-8cjw-p6xm",
+    "originalSha256": "379f22d77bfa1478341ccd49c5e4267464aabcbba03558bab332aac23fc6f23a",
+    "patchedSha256": "f507d97e950e4331bd9b739ef5d4d31ad700233e80f8a4e23f9caccd94ceffb6",
+    "edits": [
+      {
+        "before": "  const stringify = (node, parent = {}) => {",
+        "after": "  const stringify = (node, parent = {}, depth = 0) => {\n    if (depth > 128) throw new RangeError('braces nesting exceeds security limit (128)');"
+      },
+      {
+        "before": "stringify(child)",
+        "after": "stringify(child, node, depth + 1)"
+      }
+    ]
+  }
+]

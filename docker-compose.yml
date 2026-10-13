@@ -1,0 +1,23 @@
+services:
+  mysql:
+    image: mysql:8.4.10
+    container_name: anella-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: anella
+      MYSQL_USER: anella
+      MYSQL_PASSWORD: anella_local
+      MYSQL_ROOT_PASSWORD: anella_root_local
+    ports:
+      - "3307:3306"
+    volumes:
+      - anella_mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uanella -panella_local"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  anella_mysql_data:

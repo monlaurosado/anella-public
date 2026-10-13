@@ -1,0 +1,690 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum UserRole {
+  CITIZEN
+  COORDINATOR
+  MUNICIPAL_ADMIN
+  SUPER_ADMIN
+}
+
+enum OrganizationKind {
+  MUNICIPALITY
+  CIVIL_PROTECTION
+  FIRE_DEPARTMENT
+  FORESTRY_DEFENSE
+  AUTONOMIC_ADMINISTRATION
+  NGO
+  OTHER
+}
+
+enum OrganizationVerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum OrganizationClaimStatus {
+  EMAIL_PENDING
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum IncidentType {
+  WILDFIRE
+  FLOOD
+  STORM
+  EARTHQUAKE
+  SNOW
+  POWER_OUTAGE
+  SEARCH_RESCUE
+  HEALTH
+  INDUSTRIAL
+  OTHER
+}
+
+enum IncidentStatus {
+  DRAFT
+  PENDING_VALIDATION
+  ACTIVE
+  MONITORING
+  RESOLVED
+  CANCELLED
+}
+
+enum IncidentOrigin {
+  MANUAL
+  DETECTION_CANDIDATE
+  OFFICIAL_NOTICE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum NeedType {
+  WATER
+  FOOD
+  ICE
+  MEDICAL_SUPPLIES
+  TRANSPORT
+  POWER
+  TOOLS
+  SHELTER
+  VOLUNTEERS
+  OTHER
+}
+
+enum NeedStatus {
+  DRAFT
+  ACTIVE
+  COVERED
+  CANCELLED
+  EXPIRED
+}
+
+enum ContributionStatus {
+  PLEDGED
+  EN_ROUTE
+  PARTIALLY_DELIVERED
+  DELIVERED
+  CANCELLED
+  NO_SHOW
+}
+
+enum ContributionCategory {
+  WATER
+  FOOD
+  HYGIENE
+  MEDICAL_SUPPLIES
+  TOOLS
+  PROTECTIVE_EQUIPMENT
+  TRANSPORT
+  ACCOMMODATION
+  ANIMAL_SUPPORT
+  OTHER
+}
+
+enum ContributionOrigin {
+  PUBLIC_ANONYMOUS
+  COORDINATION
+  LEGACY_NEED
+}
+
+enum DropOffPointType {
+  DROP_OFF
+  LOGISTICS
+  COLLECTION
+}
+
+enum DropOffPointStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+enum IncidentNoticeStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum NotificationKind {
+  DETECTION_DIGEST
+  INCIDENT_CANDIDATE
+  ORGANIZATION_CLAIM_VERIFICATION
+  ORGANIZATION_CLAIM_DECISION
+}
+
+enum NotificationOutboxStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  DISCARDED
+}
+
+enum DetectionSource {
+  NASA_FIRMS
+  EFFIS
+  INCENDISCAT
+  AEMET
+  METEOCAT
+  EMERGENCY_112
+  CIVIL_PROTECTION
+  MANUAL
+  OTHER
+}
+
+enum ExternalDetectionStatus {
+  PENDING
+  DISMISSED
+  LINKED
+}
+
+enum PublicLocationMode {
+  MUNICIPALITY_ONLY
+  GENERALIZED_AREA
+  SAFE_POINTS_ONLY
+}
+
+model Municipality {
+  id                 String                 @id @default(cuid())
+  name               String                 @db.VarChar(191)
+  province           String?                @db.VarChar(191)
+  region             String?                @db.VarChar(191)
+  country            String                 @default("ES") @db.Char(2)
+  latitude           Decimal?               @db.Decimal(9, 6)
+  longitude          Decimal?               @db.Decimal(9, 6)
+  organizations      Organization[]
+  users              User[]
+  incidents          Incident[]
+  safePoints         SafePoint[]
+  detections         ExternalDetection[]
+  affectedIncidents  IncidentMunicipality[]
+  notificationOutbox NotificationOutbox[]
+  organizationClaims OrganizationClaim[]
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@index([name])
+}
+
+model Organization {
+  id                          String                         @id @default(cuid())
+  name                        String                         @db.VarChar(191)
+  kind                        OrganizationKind               @default(OTHER)
+  verificationStatus          OrganizationVerificationStatus @default(UNVERIFIED)
+  verifiedAt                  DateTime?
+  verifiedById                String?
+  notificationEnabled         Boolean                        @default(true)
+  notificationRadiusMeters    Int                            @default(25000)
+  notificationCooldownMinutes Int                            @default(60)
+  contactEmail                String?                        @db.VarChar(191)
+  contactPhone                String?                        @db.VarChar(50)
+  municipalityId              String?
+  municipality                Municipality?                  @relation(fields: [municipalityId], references: [id])
+  users                       User[]
+  incidents                   Incident[]
+  requestedNeeds              Need[]
+  verifiedBy                  User?                          @relation("OrganizationVerifier", fields: [verifiedById], references: [id])
+  domains                     OrganizationDomain[]
+  claims                      OrganizationClaim[]
+  dropOffPoints               SafePoint[]
+  notices                     IncidentNotice[]
+  notificationOutbox          NotificationOutbox[]
+  createdAt                   DateTime                       @default(now())
+  updatedAt                   DateTime                       @updatedAt
+
+  @@index([municipalityId])
+  @@index([verificationStatus, municipalityId])
+  @@index([verifiedById])
+}
+
+model User {
+  id                         String              @id @default(cuid())
+  name                       String?             @db.VarChar(191)
+  email                      String              @unique @db.VarChar(191)
+  emailVerified              DateTime?
+  passwordHash               String?             @db.VarChar(191)
+  phone                      String?             @db.VarChar(50)
+  role                       UserRole            @default(CITIZEN)
+  isActive                   Boolean             @default(true)
+  mustChangePassword         Boolean             @default(false)
+  sessionVersion             Int                 @default(1)
+  credentialsChangedAt       DateTime?
+  disabledAt                 DateTime?
+  lastLoginAt                DateTime?
+  organizationId             String?
+  municipalityId             String?
+  organization               Organization?       @relation(fields: [organizationId], references: [id])
+  municipality               Municipality?       @relation(fields: [municipalityId], references: [id])
+  accounts                   Account[]
+  sessions                   Session[]
+  createdBy                  Incident[]          @relation("IncidentCreator")
+  verified                   Incident[]          @relation("IncidentVerifier")
+  approvedPublicLocations    Incident[]          @relation("IncidentPublicLocationApprover")
+  requestedNeeds             Need[]              @relation("NeedRequester")
+  validatedNeeds             Need[]              @relation("NeedValidator")
+  validatedSafePoints        SafePoint[]         @relation("SafePointValidator")
+  verifiedOrganizations      Organization[]      @relation("OrganizationVerifier")
+  reviewedOrganizationClaims OrganizationClaim[] @relation("OrganizationClaimReviewer")
+  createdIncidentNotices     IncidentNotice[]    @relation("IncidentNoticeCreator")
+  auditLogs                  AuditLog[]
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
+
+  @@index([organizationId])
+  @@index([municipalityId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String  @db.VarChar(191)
+  provider          String  @db.VarChar(191)
+  providerAccountId String  @db.VarChar(191)
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String? @db.VarChar(191)
+  scope             String? @db.VarChar(191)
+  id_token          String? @db.Text
+  session_state     String? @db.VarChar(191)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @db.VarChar(191)
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String   @db.VarChar(191)
+  token      String   @unique @db.VarChar(191)
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Incident {
+  id                         String                 @id @default(cuid())
+  publicCode                 String                 @unique @db.VarChar(32)
+  title                      String                 @db.VarChar(191)
+  type                       IncidentType           @default(WILDFIRE)
+  status                     IncidentStatus         @default(PENDING_VALIDATION)
+  priority                   Priority               @default(MEDIUM)
+  origin                     IncidentOrigin         @default(MANUAL)
+  description                String?                @db.Text
+  publicSummary              String?                @db.Text
+  safetyNotice               String?                @db.Text
+  operationalLatitude        Decimal                @map("latitude") @db.Decimal(9, 6)
+  operationalLongitude       Decimal                @map("longitude") @db.Decimal(9, 6)
+  radiusMeters               Int                    @default(1500)
+  publicLocationMode         PublicLocationMode     @default(MUNICIPALITY_ONLY)
+  publicLatitude             Decimal?               @db.Decimal(9, 6)
+  publicLongitude            Decimal?               @db.Decimal(9, 6)
+  publicRadiusMeters         Int?
+  publicLocationLabel        String?                @db.VarChar(191)
+  publicLocationApprovedById String?
+  publicLocationApprovedAt   DateTime?
+  timeZone                   String                 @default("Europe/Madrid") @db.VarChar(64)
+  responsibleOrgName         String?                @db.VarChar(191)
+  organizationId             String?
+  municipalityId             String?
+  createdById                String?
+  verifiedById               String?
+  verifiedAt                 DateTime?
+  closedAt                   DateTime?
+  closedReason               String?                @db.VarChar(500)
+  lastActivityAt             DateTime               @default(now())
+  organization               Organization?          @relation(fields: [organizationId], references: [id])
+  municipality               Municipality?          @relation(fields: [municipalityId], references: [id])
+  createdBy                  User?                  @relation("IncidentCreator", fields: [createdById], references: [id])
+  verifiedBy                 User?                  @relation("IncidentVerifier", fields: [verifiedById], references: [id])
+  publicLocationApprovedBy   User?                  @relation("IncidentPublicLocationApprover", fields: [publicLocationApprovedById], references: [id])
+  safePoints                 SafePoint[]
+  needs                      Need[]
+  externalDetections         ExternalDetection[]
+  auditLogs                  AuditLog[]
+  contributions              Contribution[]
+  notices                    IncidentNotice[]
+  affectedMunicipalities     IncidentMunicipality[]
+  notificationOutbox         NotificationOutbox[]
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
+
+  @@index([status, priority])
+  @@index([status, verifiedAt, publicLocationApprovedAt, priority, lastActivityAt], map: "Incident_public_queue_idx")
+  @@index([municipalityId, status, priority, lastActivityAt])
+  @@index([municipalityId, lastActivityAt])
+  @@index([municipalityId, status, lastActivityAt, createdAt], map: "Incident_tenant_status_activity_idx")
+  @@index([municipalityId, lastActivityAt, createdAt], map: "Incident_tenant_activity_idx")
+  @@index([municipalityId, createdAt], map: "Incident_tenant_created_idx")
+  @@index([municipalityId, priority, lastActivityAt], map: "Incident_tenant_priority_idx")
+  @@index([municipalityId])
+  @@index([organizationId])
+}
+
+model SafePoint {
+  id                 String             @id @default(cuid())
+  incidentId         String
+  municipalityId     String?
+  organizationId     String?
+  pointType          DropOffPointType   @default(DROP_OFF)
+  pointStatus        DropOffPointStatus @default(DRAFT)
+  name               String             @db.VarChar(191)
+  address            String?            @db.VarChar(255)
+  instructions       String?            @db.Text
+  latitude           Decimal            @db.Decimal(9, 6)
+  longitude          Decimal            @db.Decimal(9, 6)
+  radiusMeters       Int                @default(30)
+  capacityNote       String?            @db.VarChar(191)
+  contactName        String?            @db.VarChar(191)
+  qrToken            String             @unique @db.VarChar(191)
+  isActive           Boolean            @default(true)
+  publishedAt        DateTime?
+  closedAt           DateTime?
+  deactivatedAt      DateTime?
+  deactivationReason String?            @db.VarChar(500)
+  validatedById      String?
+  validatedAt        DateTime?
+  incident           Incident           @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  municipality       Municipality?      @relation(fields: [municipalityId], references: [id])
+  organization       Organization?      @relation(fields: [organizationId], references: [id])
+  validatedBy        User?              @relation("SafePointValidator", fields: [validatedById], references: [id])
+  needs              Need[]
+  contributions      Contribution[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@unique([id, incidentId], map: "SafePoint_id_incidentId_key")
+  @@index([incidentId])
+  @@index([incidentId, isActive], map: "SafePoint_incident_active_idx")
+  @@index([incidentId, isActive, validatedAt], map: "SafePoint_public_idx")
+  @@index([municipalityId])
+  @@index([organizationId])
+  @@index([incidentId, pointStatus, publishedAt], map: "SafePoint_dropoff_public_idx")
+  @@index([validatedById])
+}
+
+model Need {
+  id                       String         @id @default(cuid())
+  incidentId               String
+  safePointId              String
+  type                     NeedType
+  title                    String         @db.VarChar(191)
+  description              String?        @db.Text
+  priority                 Priority       @default(MEDIUM)
+  quantityNeeded           Int
+  quantityReceived         Int            @default(0)
+  unit                     String         @default("uds") @db.VarChar(32)
+  deadline                 DateTime?
+  status                   NeedStatus     @default(ACTIVE)
+  requestingOrganizationId String?
+  requestedById            String?
+  validatedById            String?
+  validatedAt              DateTime?
+  publishedAt              DateTime?
+  cancelledAt              DateTime?
+  cancellationReason       String?        @db.VarChar(500)
+  incident                 Incident       @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  safePoint                SafePoint      @relation(fields: [safePointId, incidentId], references: [id, incidentId])
+  requestingOrganization   Organization?  @relation(fields: [requestingOrganizationId], references: [id])
+  requestedBy              User?          @relation("NeedRequester", fields: [requestedById], references: [id])
+  validatedBy              User?          @relation("NeedValidator", fields: [validatedById], references: [id])
+  contributions            Contribution[]
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+
+  @@unique([id, safePointId], map: "Need_id_safePointId_key")
+  @@index([incidentId, status])
+  @@index([incidentId, status, deadline], map: "Need_incident_status_deadline_idx")
+  @@index([incidentId, updatedAt])
+  @@index([incidentId, priority(sort: Desc), createdAt, id], map: "Need_incident_priority_created_id_idx")
+  @@index([safePointId])
+  @@index([priority])
+  @@index([status, deadline])
+  @@index([requestingOrganizationId])
+  @@index([requestedById])
+  @@index([validatedById])
+}
+
+model Contribution {
+  id                    String               @id @default(cuid())
+  publicCode            String               @unique @db.VarChar(20)
+  cancelTokenHash       String?              @unique @db.Char(64)
+  incidentId            String
+  needId                String?
+  safePointId           String
+  category              ContributionCategory @default(OTHER)
+  origin                ContributionOrigin   @default(PUBLIC_ANONYMOUS)
+  description           String?              @db.VarChar(500)
+  unit                  String?              @db.VarChar(32)
+  citizenName           String               @db.VarChar(191)
+  citizenPhone          String?              @db.VarChar(50)
+  citizenEmail          String?              @db.VarChar(191)
+  quantity              Int                  @default(1)
+  deliveredQuantity     Int                  @default(0)
+  eta                   DateTime?
+  status                ContributionStatus   @default(PLEDGED)
+  statusReason          String?              @db.VarChar(500)
+  revision              Int                  @default(1)
+  notes                 String?              @db.Text
+  consentAt             DateTime
+  personalDataConsentAt DateTime?
+  followUpConsentAt     DateTime?
+  piiExpiresAt          DateTime?
+  checkedInAt           DateTime?
+  cancelledAt           DateTime?
+  incident              Incident             @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  need                  Need?                @relation(fields: [needId, safePointId], references: [id, safePointId], onDelete: Restrict)
+  safePoint             SafePoint            @relation(fields: [safePointId, incidentId], references: [id, incidentId], onDelete: Restrict)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@index([needId, status])
+  @@index([incidentId, status, updatedAt], map: "Contribution_incident_status_updated_idx")
+  @@index([safePointId, category, status, eta], map: "Contribution_dropoff_category_status_eta_idx")
+  @@index([piiExpiresAt], map: "Contribution_pii_expiry_idx")
+  @@index([status, updatedAt])
+  @@index([needId, status, eta])
+  @@index([safePointId])
+  @@index([createdAt])
+  @@index([status, updatedAt, createdAt], map: "Contribution_queue_status_updated_created_idx")
+  @@index([updatedAt, createdAt], map: "Contribution_queue_updated_created_idx")
+}
+
+model SubmissionThrottle {
+  id          String   @id @default(cuid())
+  keyHash     String   @db.Char(64)
+  action      String   @db.VarChar(64)
+  windowStart DateTime
+  count       Int      @default(1)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([keyHash, action, windowStart])
+  @@index([updatedAt])
+}
+
+model ExternalDetection {
+  id                      String                  @id @default(cuid())
+  source                  DetectionSource
+  provider                String?                 @db.VarChar(64)
+  externalId              String?                 @unique @db.VarChar(191)
+  sourceUrl               String?                 @db.VarChar(255)
+  latitude                Decimal                 @db.Decimal(9, 6)
+  longitude               Decimal                 @db.Decimal(9, 6)
+  detectedAt              DateTime
+  brightness              Decimal?                @db.Decimal(8, 2)
+  confidence              String?                 @db.VarChar(50)
+  satellite               String?                 @db.VarChar(50)
+  instrument              String?                 @db.VarChar(50)
+  fireRadiativePowerMw    Decimal?                @db.Decimal(10, 2)
+  footprintAreaHectares   Decimal?                @db.Decimal(12, 4)
+  footprintJson           Json?
+  providerStatus          String?                 @db.VarChar(32)
+  providerStatusChangedAt DateTime?
+  lastSeenAt              DateTime?
+  status                  ExternalDetectionStatus @default(PENDING)
+  rawJson                 Json?
+  municipalityId          String?
+  linkedIncidentId        String?
+  municipality            Municipality?           @relation(fields: [municipalityId], references: [id])
+  linkedIncident          Incident?               @relation(fields: [linkedIncidentId], references: [id])
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+
+  @@index([source, detectedAt])
+  @@index([provider, providerStatus, lastSeenAt], map: "ExternalDetection_provider_status_seen_idx")
+  @@index([status])
+  @@index([status, detectedAt], map: "ExternalDetection_status_detectedAt_idx")
+  @@index([municipalityId, status, detectedAt])
+  @@index([linkedIncidentId])
+}
+
+model ExternalSourceSync {
+  sourceKey     String          @id @db.VarChar(64)
+  source        DetectionSource
+  label         String          @db.VarChar(100)
+  status        String          @default("UNKNOWN") @db.VarChar(20)
+  lastAttemptAt DateTime
+  lastSuccessAt DateTime?
+  lastFailureAt DateTime?
+  received      Int             @default(0)
+  rejected      Int             @default(0)
+  imported      Int             @default(0)
+  updated       Int             @default(0)
+  statusChanged Int             @default(0)
+  durationMs    Int?
+  error         String?         @db.VarChar(500)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([status, lastAttemptAt], map: "ExternalSourceSync_status_attempt_idx")
+}
+
+model IncidentMunicipality {
+  incidentId     String
+  municipalityId String
+  isPrimary      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  incident       Incident     @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  municipality   Municipality @relation(fields: [municipalityId], references: [id], onDelete: Cascade)
+
+  @@id([incidentId, municipalityId])
+  @@index([municipalityId, incidentId])
+}
+
+model IncidentNotice {
+  id             String               @id @default(cuid())
+  incidentId     String
+  organizationId String
+  createdById    String
+  title          String               @db.VarChar(191)
+  body           String               @db.Text
+  status         IncidentNoticeStatus @default(DRAFT)
+  publishedAt    DateTime?
+  closedAt       DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  incident       Incident             @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy      User                 @relation("IncidentNoticeCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([incidentId, status, publishedAt])
+  @@index([organizationId, createdAt])
+}
+
+model OrganizationDomain {
+  id             String       @id @default(cuid())
+  organizationId String
+  domain         String       @unique @db.VarChar(191)
+  isVerified     Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, isVerified])
+}
+
+model OrganizationClaim {
+  id                          String                  @id @default(cuid())
+  organizationId              String
+  municipalityId              String?
+  claimantName                String                  @db.VarChar(191)
+  claimantEmail               String                  @db.VarChar(191)
+  emailDomain                 String                  @db.VarChar(191)
+  verificationTokenHash       String?                 @unique @db.Char(64)
+  verificationTokenCiphertext String?                 @db.Text
+  status                      OrganizationClaimStatus @default(EMAIL_PENDING)
+  emailVerifiedAt             DateTime?
+  reviewedById                String?
+  reviewedAt                  DateTime?
+  reviewReason                String?                 @db.VarChar(500)
+  expiresAt                   DateTime
+  piiExpiresAt                DateTime
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
+  organization                Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  municipality                Municipality?           @relation(fields: [municipalityId], references: [id], onDelete: SetNull)
+  reviewedBy                  User?                   @relation("OrganizationClaimReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  notificationOutbox          NotificationOutbox[]
+
+  @@index([status, createdAt])
+  @@index([organizationId, claimantEmail, status])
+  @@index([municipalityId, status])
+  @@index([piiExpiresAt])
+}
+
+model NotificationOutbox {
+  id                  String                   @id @default(cuid())
+  idempotencyKey      String                   @unique @db.VarChar(191)
+  kind                NotificationKind
+  status              NotificationOutboxStatus @default(PENDING)
+  incidentId          String?
+  municipalityId      String?
+  organizationId      String?
+  organizationClaimId String?
+  templateKey         String                   @db.VarChar(100)
+  payload             Json
+  notBefore           DateTime                 @default(now())
+  attempts            Int                      @default(0)
+  maxAttempts         Int                      @default(5)
+  lockedAt            DateTime?
+  sentAt              DateTime?
+  discardedAt         DateTime?
+  lastError           String?                  @db.VarChar(500)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  incident            Incident?                @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  municipality        Municipality?            @relation(fields: [municipalityId], references: [id], onDelete: SetNull)
+  organization        Organization?            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationClaim   OrganizationClaim?       @relation(fields: [organizationClaimId], references: [id], onDelete: Cascade)
+
+  @@index([status, notBefore, createdAt])
+  @@index([organizationId, kind, createdAt])
+  @@index([municipalityId, kind, createdAt])
+  @@index([incidentId, kind, createdAt])
+}
+
+model AuditLog {
+  id             String    @id @default(cuid())
+  actorId        String?
+  incidentId     String?
+  municipalityId String?
+  action         String    @db.VarChar(191)
+  entityType     String    @db.VarChar(191)
+  entityId       String?   @db.VarChar(191)
+  metadata       Json?
+  actor          User?     @relation(fields: [actorId], references: [id])
+  incident       Incident? @relation(fields: [incidentId], references: [id])
+  createdAt      DateTime  @default(now())
+
+  @@index([actorId])
+  @@index([incidentId])
+  @@index([incidentId, createdAt])
+  @@index([municipalityId, createdAt])
+  @@index([action])
+}
